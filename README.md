@@ -39,7 +39,7 @@ Bypass the bloat of traditional GUIs. Engage directly with the data stream.
 
 1.  **Clone Repository**
     ```bash
-    git clone https://github.com/nixsh5/tca.git
+    git clone https://github.com/Dinesh-raya/tchat.git
     cd tca
     ```
 
