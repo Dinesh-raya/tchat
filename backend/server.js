@@ -182,7 +182,7 @@ app.get('/api/rooms', async (req, res) => {
 });
 
 //  TEMPORARY: One-time admin setup (DELETE after first use!)
-app.post('/api/init-admin', async (req, res) => {
+app.get('/api/init-admin', async (req, res) => {
     try {
         const adminExists = await User.findOne({ username: 'admin' });
         if (adminExists) {
