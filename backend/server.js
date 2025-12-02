@@ -181,6 +181,28 @@ app.get('/api/rooms', async (req, res) => {
     res.json(rooms.map(r => r.name));
 });
 
+//  TEMPORARY: One-time admin setup (DELETE after first use!)
+app.post('/api/init-admin', async (req, res) => {
+    try {
+        const adminExists = await User.findOne({ username: 'admin' });
+        if (adminExists) {
+            return res.json({ msg: 'Admin already exists!' });
+        }
+
+        const hashedPassword = await bcrypt.hash('admin123', 10);
+        await User.create({
+            username: 'admin',
+            password: hashedPassword,
+            role: 'admin'
+        });
+
+        res.json({ msg: 'Admin user created successfully! Now LOGIN with admin/admin123' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ msg: 'Error creating admin', error: err.message });
+    }
+});
+
 //  MongoDB connection 
 mongoose.connect(process.env.MONGODB_URI, {
     useNewUrlParser: true,
