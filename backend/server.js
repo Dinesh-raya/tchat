@@ -21,6 +21,9 @@ const usernameToSocket = {}; // { username: socket.id }
 
 const app = express();
 
+// Trust Proxy (Required for Render/Heroku)
+app.set('trust proxy', 1);
+
 // Security Middleware
 app.use(helmet());
 
@@ -111,11 +114,66 @@ app.post('/api/auth/login', [
         );
     } catch (err) {
         console.error('Login error:', err.message);
-        res.status(500).send('Server error');
+        res.status(500).json({ msg: 'Server error' });
     }
 });
 
 
+
+
+// Middleware to check if user is admin (for HTTP routes)
+const isAdmin = (req, res, next) => {
+    const token = req.header('x-auth-token');
+    if (!token) return res.status(401).json({ msg: 'No token, authorization denied' });
+
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        if (decoded.user.role !== 'admin') {
+            return res.status(403).json({ msg: 'Access denied. Admin only.' });
+        }
+        req.user = decoded.user;
+        next();
+    } catch (e) {
+        res.status(400).json({ msg: 'Token is not valid' });
+    }
+};
+
+//  Admin Register Route 
+app.post('/api/auth/register', [
+    isAdmin,
+    body('username').trim().escape(),
+    body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 chars').trim().escape()
+], async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { username, password } = req.body;
+
+    try {
+        let user = await User.findOne({ username });
+        if (user) {
+            return res.status(400).json({ msg: 'User already exists' });
+        }
+
+        user = new User({
+            username,
+            password,
+            role: 'user' // Default to user
+        });
+
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(password, salt);
+
+        await user.save();
+
+        res.json({ msg: `User ${username} created successfully` });
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).json({ msg: 'Server error' });
+    }
+});
 
 //  List all rooms (for /listrooms command) 
 app.get('/api/rooms', async (req, res) => {
