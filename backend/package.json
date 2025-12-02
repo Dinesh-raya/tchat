@@ -20,6 +20,9 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.15.0",
     "multer": "^1.4.5-lts.2",
+    "express-rate-limit": "^7.1.5",
+    "express-validator": "^7.0.1",
+    "helmet": "^7.1.0",
     "socket.io": "^4.8.1"
   },
   "devDependencies": {

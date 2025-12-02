@@ -13,6 +13,9 @@ const Message = require('./models/message');
 const cloudinary = require('cloudinary').v2;
 const multer = require('multer');
 const upload = multer({ dest: 'uploads/' }); // Temporary local storage
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const { body, validationResult } = require('express-validator');
 
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -24,7 +27,38 @@ const userSockets = {}; // { socket.id: { username, room } }
 const usernameToSocket = {}; // { username: socket.id }
 
 const app = express();
-app.use(cors());
+
+// Security Middleware
+app.use(helmet());
+
+// Rate Limiting
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limit each IP to 100 requests per windowMs
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+app.use('/api/auth', limiter);
+
+// CORS Configuration
+const allowedOrigins = [process.env.FRONTEND_URL || 'http://localhost:3000'];
+app.use(cors({
+    origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.indexOf(origin) === -1) {
+            // In development, you might want to allow localhost
+            if (process.env.NODE_ENV !== 'production') {
+                return callback(null, true);
+            }
+            var msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+            return callback(new Error(msg), false);
+        }
+        return callback(null, true);
+    },
+    credentials: true
+}));
+
 app.use(express.json());
 
 // Basic test route
@@ -33,7 +67,14 @@ app.get('/', (req, res) => {
 });
 
 //  Authentication Route 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', [
+    body('username').trim().escape(),
+    body('password').trim().escape()
+], async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+    }
     const { username, password } = req.body;
 
     if (!username || !password) {
@@ -112,8 +153,9 @@ mongoose.connect(process.env.MONGODB_URI, {
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
-        origin: '*',
-        methods: ['GET', 'POST']
+        origin: allowedOrigins,
+        methods: ['GET', 'POST'],
+        credentials: true
     }
 });
 
