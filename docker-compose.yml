@@ -1,0 +1,41 @@
+services:
+  mongodb:
+    image: mongo:latest
+    container_name: tca-mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password123
+      MONGO_INITDB_DATABASE: tca_db
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - tca-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: tca-backend
+    ports:
+      - "5000:5000"
+    environment:
+      MONGODB_URI: mongodb://admin:password123@mongodb:27017/tca_db?authSource=admin
+      JWT_SECRET: dev_secret_key_min_32_chars_required_here
+      PORT: 5000
+      CLOUDINARY_CLOUD_NAME: dev_cloudinary
+      CLOUDINARY_API_KEY: dev_api_key
+      CLOUDINARY_API_SECRET: dev_api_secret
+    depends_on:
+      - mongodb
+    networks:
+      - tca-network
+    command: sh -c "node seed.js && node seedRooms.js && node server.js"
+
+volumes:
+  mongodb_data:
+
+networks:
+  tca-network:
+    driver: bridge
