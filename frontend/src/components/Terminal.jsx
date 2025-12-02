@@ -82,6 +82,7 @@ const Terminal = () => {
 
                         '/logout - Logout\r\n' +
                         '/adduser <username> <password> - (Admin) Create new user\r\n' +
+                        '/giveaccess <username> <roomname> - (Admin) Grant room access\r\n' +
                         '/quit - Quit the app\r\n'
                     );
                     break;
@@ -216,6 +217,40 @@ const Terminal = () => {
                                     xtermRef.current.write(`Success: ${body.msg}\r\n`);
                                 } else {
                                     xtermRef.current.write(`Error: ${body.msg || (body.errors && body.errors[0].msg) || 'Failed to create user'}\r\n`);
+                                }
+                                writePrompt();
+                            })
+                            .catch(err => {
+                                xtermRef.current.write('Network error.\r\n');
+                                writePrompt();
+                            });
+                    }
+                    break;
+                case '/giveaccess':
+                    isAsyncCommand = true;
+                    if (!state.current.loggedIn) {
+                        xtermRef.current.write('Please login first.\r\n');
+                        writePrompt();
+                    } else if (args.length < 2) {
+                        xtermRef.current.write('Usage: /giveaccess <username> <roomname>\r\n');
+                        writePrompt();
+                    } else {
+                        const targetUsername = args[0];
+                        const targetRoomName = args[1];
+                        fetch(`${backendUrl}/api/admin/grant-room-access`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'x-auth-token': state.current.token
+                            },
+                            body: JSON.stringify({ username: targetUsername, roomName: targetRoomName }),
+                        })
+                            .then(res => res.json().then(data => ({ status: res.status, body: data })))
+                            .then(({ status, body }) => {
+                                if (status === 200) {
+                                    xtermRef.current.write(`Success: ${body.msg}\r\n`);
+                                } else {
+                                    xtermRef.current.write(`Error: ${body.msg || 'Failed to grant access'}\r\n`);
                                 }
                                 writePrompt();
                             })

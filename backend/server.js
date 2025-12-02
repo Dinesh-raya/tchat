@@ -203,6 +203,30 @@ app.get('/api/init-admin', async (req, res) => {
     }
 });
 
+//  Admin: Grant room access to user
+app.post('/api/admin/grant-room-access', isAdmin, async (req, res) => {
+    try {
+        const { username, roomName } = req.body;
+
+        const room = await Room.findOne({ name: roomName });
+        if (!room) {
+            return res.status(404).json({ msg: 'Room not found' });
+        }
+
+        if (room.allowedUsers.includes(username)) {
+            return res.json({ msg: `${username} already has access to ${roomName}` });
+        }
+
+        room.allowedUsers.push(username);
+        await room.save();
+
+        res.json({ msg: `Granted ${username} access to ${roomName}` });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ msg: 'Error granting access', error: err.message });
+    }
+});
+
 //  MongoDB connection 
 mongoose.connect(process.env.MONGODB_URI, {
     useNewUrlParser: true,
