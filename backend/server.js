@@ -10,18 +10,11 @@ const jwt = require('jsonwebtoken');
 const User = require('./models/user');
 const Room = require('./models/room');
 const Message = require('./models/message');
-const cloudinary = require('cloudinary').v2;
-const multer = require('multer');
-const upload = multer({ dest: 'uploads/' }); // Temporary local storage
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { body, validationResult } = require('express-validator');
 
-cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET,
-});
+
 
 const userSockets = {}; // { socket.id: { username, room } }
 const usernameToSocket = {}; // { username: socket.id }
@@ -122,18 +115,7 @@ app.post('/api/auth/login', [
     }
 });
 
-//  Media Upload Route 
-app.post('/api/upload', upload.single('image'), async (req, res) => {
-    try {
-        const result = await cloudinary.uploader.upload(req.file.path, {
-            folder: 'chat-images',
-        });
-        res.json({ url: result.secure_url });
-    } catch (err) {
-        console.error('Cloudinary upload error:', err);
-        res.status(500).json({ msg: 'Upload failed' });
-    }
-});
+
 
 //  List all rooms (for /listrooms command) 
 app.get('/api/rooms', async (req, res) => {

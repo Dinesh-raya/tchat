@@ -4,7 +4,7 @@ import { FitAddon } from 'xterm-addon-fit';
 import { io } from 'socket.io-client';
 import 'xterm/css/xterm.css';
 
-const fileInputRef = React.createRef();
+
 const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000';
 
 const Terminal = () => {
@@ -22,51 +22,9 @@ const Terminal = () => {
         token: null,
     });
 
-    function isImageUrl(url) {
-        return /\.(jpeg|jpg|gif|png|webp)$/i.test(url);
-    }
 
-    function handleFileUpload(event) {
-        const file = event.target.files[0];
-        if (!file) return;
 
-        const formData = new FormData();
-        formData.append('image', file);
 
-        fetch(`${backendUrl}/api/upload`, {
-            method: 'POST',
-            body: formData
-        })
-            .then(res => res.json())
-            .then(data => {
-                if (data.url) {
-                    if (state.current.inDM) {
-                        socketRef.current.emit('dm', {
-                            to: state.current.dmUser,
-                            from: state.current.username,
-                            msg: data.url
-                        });
-                        xtermRef.current.write(`[DM to ${state.current.dmUser}]: [Image] ${data.url}\r\n`);
-                    } else if (state.current.currentRoom) {
-                        socketRef.current.emit('room-message', {
-                            room: state.current.currentRoom,
-                            user: state.current.username,
-                            msg: data.url
-                        });
-                        xtermRef.current.write(`[${state.current.currentRoom}] ${state.current.username}: [Image] ${data.url}\r\n`);
-                    } else {
-                        xtermRef.current.write('Join a room or start a DM to send images.\r\n');
-                    }
-                } else {
-                    xtermRef.current.write('Image upload failed.\r\n');
-                }
-                event.target.value = '';
-            })
-            .catch(() => {
-                xtermRef.current.write('Image upload failed.\r\n');
-                event.target.value = '';
-            });
-    }
 
     useLayoutEffect(() => {
         if (!terminalRef.current) return;
@@ -121,8 +79,9 @@ const Terminal = () => {
                         '/users - List users in current room\r\n' +
                         '/dm <username> - Start direct message\r\n' +
                         '/exit - Exit DM or leave room\r\n' +
-                        '/image - Upload and send an image\r\n' +
+
                         '/logout - Logout\r\n' +
+                        '/adduser <username> <password> - (Admin) Create new user\r\n' +
                         '/quit - Quit the app\r\n'
                     );
                     break;
@@ -230,11 +189,40 @@ const Terminal = () => {
                         xtermRef.current.write('Nothing to exit.\r\n');
                     }
                     break;
-                case '/image':
+
+
+                case '/adduser':
+                    isAsyncCommand = true;
                     if (!state.current.loggedIn) {
                         xtermRef.current.write('Please login first.\r\n');
+                        writePrompt();
+                    } else if (args.length < 2) {
+                        xtermRef.current.write('Usage: /adduser <username> <password>\r\n');
+                        writePrompt();
                     } else {
-                        fileInputRef.current.click();
+                        const newUsername = args[0];
+                        const newPassword = args[1];
+                        fetch(`${backendUrl}/api/auth/register`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'x-auth-token': state.current.token
+                            },
+                            body: JSON.stringify({ username: newUsername, password: newPassword }),
+                        })
+                            .then(res => res.json().then(data => ({ status: res.status, body: data })))
+                            .then(({ status, body }) => {
+                                if (status === 200) {
+                                    xtermRef.current.write(`Success: ${body.msg}\r\n`);
+                                } else {
+                                    xtermRef.current.write(`Error: ${body.msg || (body.errors && body.errors[0].msg) || 'Failed to create user'}\r\n`);
+                                }
+                                writePrompt();
+                            })
+                            .catch(err => {
+                                xtermRef.current.write('Network error.\r\n');
+                                writePrompt();
+                            });
                     }
                     break;
                 case '/logout':
@@ -268,17 +256,9 @@ const Terminal = () => {
                 return;
             }
             if (state.current.inDM) {
-                if (isImageUrl(msg)) {
-                    xtermRef.current.write(`[DM to ${state.current.dmUser}]: [Image] ${msg}\r\n`);
-                } else {
-                    xtermRef.current.write(`[DM to ${state.current.dmUser}]: ${msg}\r\n`);
-                }
+                xtermRef.current.write(`[DM to ${state.current.dmUser}]: ${msg}\r\n`);
             } else if (state.current.currentRoom) {
-                if (isImageUrl(msg)) {
-                    xtermRef.current.write(`[${state.current.currentRoom}] ${state.current.username || 'You'}: [Image] ${msg}\r\n`);
-                } else {
-                    xtermRef.current.write(`[${state.current.currentRoom}] ${state.current.username || 'You'}: ${msg}\r\n`);
-                }
+                xtermRef.current.write(`[${state.current.currentRoom}] ${state.current.username || 'You'}: ${msg}\r\n`);
             } else {
                 xtermRef.current.write('Join a room or start a DM to send messages.\r\n');
             }
@@ -301,11 +281,7 @@ const Terminal = () => {
             // Room messages
             socket.on('room-message', (data) => {
                 if (data.user !== state.current.username) {
-                    if (isImageUrl(data.msg)) {
-                        xtermRef.current.write(`\r\n[${data.room}] ${data.user}: [Image] ${data.msg}\r\n`);
-                    } else {
-                        xtermRef.current.write(`\r\n[${data.room}] ${data.user}: ${data.msg}\r\n`);
-                    }
+                    xtermRef.current.write(`\r\n[${data.room}] ${data.user}: ${data.msg}\r\n`);
                     writePrompt();
                 }
             });
@@ -313,11 +289,7 @@ const Terminal = () => {
             // Direct messages
             socket.on('dm', (data) => {
                 if (data.to === state.current.username) {
-                    if (isImageUrl(data.msg)) {
-                        xtermRef.current.write(`\r\n[DM from ${data.from}]: [Image] ${data.msg}\r\n`);
-                    } else {
-                        xtermRef.current.write(`\r\n[DM from ${data.from}]: ${data.msg}\r\n`);
-                    }
+                    xtermRef.current.write(`\r\n[DM from ${data.from}]: ${data.msg}\r\n`);
                     writePrompt();
                 }
             });
@@ -351,11 +323,7 @@ const Terminal = () => {
             // Room history
             socket.on('room-history', (messages) => {
                 messages.forEach(msg => {
-                    if (isImageUrl(msg.text)) {
-                        xtermRef.current.write(`[${msg.room}] ${msg.from}: [Image] ${msg.text}\r\n`);
-                    } else {
-                        xtermRef.current.write(`[${msg.room}] ${msg.from}: ${msg.text}\r\n`);
-                    }
+                    xtermRef.current.write(`[${msg.room}] ${msg.from}: ${msg.text}\r\n`);
                 });
                 writePrompt();
             });
@@ -365,11 +333,7 @@ const Terminal = () => {
                 messages.forEach(msg => {
                     const direction = msg.from === state.current.username ? 'to' : 'from';
                     const other = direction === 'to' ? msg.to : msg.from;
-                    if (isImageUrl(msg.text)) {
-                        xtermRef.current.write(`[DM ${direction} ${other}]: [Image] ${msg.text}\r\n`);
-                    } else {
-                        xtermRef.current.write(`[DM ${direction} ${other}]: ${msg.text}\r\n`);
-                    }
+                    xtermRef.current.write(`[DM ${direction} ${other}]: ${msg.text}\r\n`);
                 });
                 writePrompt();
             });
@@ -449,14 +413,7 @@ const Terminal = () => {
 
     return (
         <div style={{ position: 'relative', width: '100vw', height: '100vh', background: '#1e1e1e' }}>
-            {/* Hidden file input for image uploads */}
-            <input
-                type="file"
-                ref={fileInputRef}
-                style={{ display: 'none' }}
-                accept="image/*"
-                onChange={handleFileUpload}
-            />
+
             {/* Terminal container */}
             <div
                 ref={terminalRef}
