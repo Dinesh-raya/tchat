@@ -81,7 +81,8 @@ const Terminal = () => {
                         '/exit - Exit DM or leave room\r\n' +
 
                         '/logout - Logout\r\n' +
-                        '/adduser <username> <password> - (Admin) Create new user\r\n' +
+                        '/adduser <username> <password> <securitykey> - (Admin) Create new user\r\n' +
+                        '/changepass <oldpass> <newpass> <securitykey> - Change your password\r\n' +
                         '/giveaccess <username> <roomname> - (Admin) Grant room access\r\n' +
                         '/quit - Quit the app\r\n'
                     );
@@ -197,19 +198,20 @@ const Terminal = () => {
                     if (!state.current.loggedIn) {
                         xtermRef.current.write('Please login first.\r\n');
                         writePrompt();
-                    } else if (args.length < 2) {
-                        xtermRef.current.write('Usage: /adduser <username> <password>\r\n');
+                    } else if (args.length < 3) {
+                        xtermRef.current.write('Usage: /adduser <username> <password> <securitykey>\r\n');
                         writePrompt();
                     } else {
                         const newUsername = args[0];
                         const newPassword = args[1];
+                        const newSecurityKey = args[2];
                         fetch(`${backendUrl}/api/auth/register`, {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
                                 'x-auth-token': state.current.token
                             },
-                            body: JSON.stringify({ username: newUsername, password: newPassword }),
+                            body: JSON.stringify({ username: newUsername, password: newPassword, securityKey: newSecurityKey }),
                         })
                             .then(res => res.json().then(data => ({ status: res.status, body: data })))
                             .then(({ status, body }) => {
@@ -217,6 +219,49 @@ const Terminal = () => {
                                     xtermRef.current.write(`Success: ${body.msg}\r\n`);
                                 } else {
                                     xtermRef.current.write(`Error: ${body.msg || (body.errors && body.errors[0].msg) || 'Failed to create user'}\r\n`);
+                                }
+                                writePrompt();
+                            })
+                            .catch(err => {
+                                xtermRef.current.write('Network error.\r\n');
+                                writePrompt();
+                            });
+                    }
+                    break;
+                case '/changepass':
+                    isAsyncCommand = true;
+                    if (!state.current.loggedIn) {
+                        xtermRef.current.write('Please login first.\r\n');
+                        writePrompt();
+                    } else if (args.length < 3) {
+                        xtermRef.current.write('Usage: /changepass <oldpassword> <newpassword> <securitykey>\r\n');
+                        writePrompt();
+                    } else {
+                        const oldPassword = args[0];
+                        const newPassword = args[1];
+                        const securityKey = args[2];
+                        fetch(`${backendUrl}/api/auth/change-password`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'x-auth-token': state.current.token
+                            },
+                            body: JSON.stringify({ oldPassword, newPassword, securityKey }),
+                        })
+                            .then(res => res.json().then(data => ({ status: res.status, body: data })))
+                            .then(({ status, body }) => {
+                                if (status === 200) {
+                                    xtermRef.current.write(`${body.msg}\r\n`);
+                                    // Auto logout after password change
+                                    socketRef.current.emit('logout');
+                                    state.current.loggedIn = false;
+                                    state.current.username = '';
+                                    state.current.currentRoom = '';
+                                    state.current.inDM = false;
+                                    state.current.dmUser = '';
+                                    state.current.token = null;
+                                } else {
+                                    xtermRef.current.write(`Error: ${body.msg || (body.errors && body.errors[0].msg) || 'Failed to change password'}\r\n`);
                                 }
                                 writePrompt();
                             })

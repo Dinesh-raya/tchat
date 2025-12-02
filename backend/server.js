@@ -142,14 +142,15 @@ const isAdmin = (req, res, next) => {
 app.post('/api/auth/register', [
     isAdmin,
     body('username').trim().escape(),
-    body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 chars').trim().escape()
+    body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 chars').trim().escape(),
+    body('securityKey').notEmpty().withMessage('Security key is required').trim().escape()
 ], async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
         return res.status(400).json({ errors: errors.array() });
     }
 
-    const { username, password } = req.body;
+    const { username, password, securityKey } = req.body;
 
     try {
         let user = await User.findOne({ username });
@@ -160,7 +161,8 @@ app.post('/api/auth/register', [
         user = new User({
             username,
             password,
-            role: 'user' // Default to user
+            role: 'user', // Default to user
+            securityKey
         });
 
         const salt = await bcrypt.genSalt(10);
@@ -171,6 +173,57 @@ app.post('/api/auth/register', [
         res.json({ msg: `User ${username} created successfully` });
     } catch (err) {
         console.error(err.message);
+        res.status(500).json({ msg: 'Server error' });
+    }
+});
+
+//  Change Password Route (requires old password + security key)
+app.post('/api/auth/change-password', [
+    body('oldPassword').notEmpty().withMessage('Old password is required'),
+    body('newPassword').isLength({ min: 6 }).withMessage('New password must be at least 6 chars'),
+    body('securityKey').notEmpty().withMessage('Security key is required')
+], async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+    }
+
+    const token = req.header('x-auth-token');
+    if (!token) {
+        return res.status(401).json({ msg: 'No token, authorization denied' });
+    }
+
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const { oldPassword, newPassword, securityKey } = req.body;
+
+        const user = await User.findById(decoded.user.id);
+        if (!user) {
+            return res.status(404).json({ msg: 'User not found' });
+        }
+
+        // Verify old password
+        const isMatch = await bcrypt.compare(oldPassword, user.password);
+        if (!isMatch) {
+            return res.status(400).json({ msg: 'Old password is incorrect' });
+        }
+
+        // Verify security key
+        if (user.securityKey !== securityKey) {
+            return res.status(400).json({ msg: 'Security key is incorrect' });
+        }
+
+        // Hash and save new password
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(newPassword, salt);
+        await user.save();
+
+        res.json({ msg: 'Password changed successfully! Please login again.' });
+    } catch (err) {
+        console.error(err.message);
+        if (err.name === 'JsonWebTokenError') {
+            return res.status(401).json({ msg: 'Invalid token' });
+        }
         res.status(500).json({ msg: 'Server error' });
     }
 });

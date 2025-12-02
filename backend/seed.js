@@ -4,9 +4,9 @@ const bcrypt = require('bcryptjs');
 const User = require('./models/user');
 
 const users = [
-    { username: 'abc', password: 'pass1' },
-    { username: 'xyz', password: 'pass2' },
-    { username: 'admin', password: 'admin123', role: 'admin' }
+    { username: 'abc', password: 'pass1', securityKey: 'key1' },
+    { username: 'xyz', password: 'pass2', securityKey: 'key2' },
+    { username: 'admin', password: 'admin123', role: 'admin', securityKey: 'adminkey' }
 ];
 
 async function seed() {
