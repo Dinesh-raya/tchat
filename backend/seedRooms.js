@@ -3,9 +3,9 @@ const mongoose = require('mongoose');
 const Room = require('./models/room');
 
 const rooms = [
-    { name: 'gen', allowedUsers: ['xyz', 'abc'] },
-    { name: 'gen2', allowedUsers: ['xyz', 'mno'] },
-    // rooms/grps can be added and users can be give permissions
+    { name: 'general', allowedUsers: ['admin', 'abc', 'xyz'] },
+    { name: 'private', allowedUsers: ['admin', 'abc'] },
+    // Add more rooms here as needed
 ];
 
 async function seedRooms() {
