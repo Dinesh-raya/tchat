@@ -336,9 +336,11 @@ const Terminal = () => {
                 return;
             }
             if (state.current.inDM) {
-                xtermRef.current.write(`[DM to ${state.current.dmUser}]: ${msg}\r\n`);
+                // xtermRef.current.write(`[DM to ${state.current.dmUser}]: ${msg}\r\n`);
+                // Do nothing locally, wait for server echo
             } else if (state.current.currentRoom) {
-                xtermRef.current.write(`[${state.current.currentRoom}] ${state.current.username || 'You'}: ${msg}\r\n`);
+                // xtermRef.current.write(`[${state.current.currentRoom}] ${state.current.username || 'You'}: ${msg}\r\n`);
+                // Do nothing locally, wait for server echo
             } else {
                 xtermRef.current.write('Join a room or start a DM to send messages.\r\n');
             }
@@ -416,20 +418,20 @@ const Terminal = () => {
 
             // CRITICAL: Room message listener (for receiving messages from others)
             socket.on('room-message', (data) => {
-                // Don't print our own messages twice (already printed locally)
-                if (data.user !== state.current.username) {
-                    xtermRef.current.write(`\r\n[${data.room}] ${data.user}: ${data.msg}\r\n`);
-                    writePrompt();
-                }
+                // Always print message (Single Source of Truth)
+                xtermRef.current.write(`\r\n[${data.room}] ${data.user}: ${data.msg}\r\n`);
+                writePrompt();
             });
 
             // CRITICAL: DM listener (for receiving DMs)
             socket.on('dm', (data) => {
-                // Only print DMs sent BY others (not echoes of our own)
-                if (data.from !== state.current.username) {
+                // Always print DM (Single Source of Truth)
+                if (data.from === state.current.username) {
+                    xtermRef.current.write(`\r\n[DM to ${data.to}]: ${data.msg}\r\n`);
+                } else {
                     xtermRef.current.write(`\r\n[DM from ${data.from}]: ${data.msg}\r\n`);
-                    writePrompt();
                 }
+                writePrompt();
             });
 
             // DM error notifications

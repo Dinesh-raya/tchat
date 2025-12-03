@@ -315,6 +315,19 @@ io.use((socket, next) => {
 io.on('connection', (socket) => {
     console.log('A user connected:', socket.id);
 
+    // CRITICAL: Track user immediately on connection for DMs
+    if (socket.user) {
+        const username = socket.user.username;
+        usernameToSocket[username] = socket.id;
+        // Initialize userSockets with username (room will be added later)
+        userSockets[socket.id] = {
+            username,
+            room: null,
+            activeDMs: new Set()
+        };
+        console.log(`User ${username} registered on socket ${socket.id}`);
+    }
+
     //  Logout 
     socket.on('logout', () => {
         if (userSockets[socket.id]) {
