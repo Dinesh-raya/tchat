@@ -343,7 +343,11 @@ io.on('connection', (socket) => {
             socket.leave(userSockets[socket.id].room);
         }
         socket.join(room);
-        userSockets[socket.id] = { username, room };
+
+        // Initialize or preserve activeDMs
+        const existingDMs = userSockets[socket.id]?.activeDMs || new Set();
+        userSockets[socket.id] = { username, room, activeDMs: existingDMs };
+
         usernameToSocket[username] = socket.id;
         socket.emit('join-room-success', { room });
 
@@ -380,7 +384,24 @@ io.on('connection', (socket) => {
     socket.on('dm', async (data) => {
         // data: { to, from, msg }
         const targetSocketId = usernameToSocket[data.to];
+
+        // Track active DMs for sender
+        if (userSockets[socket.id]) {
+            if (!userSockets[socket.id].activeDMs) {
+                userSockets[socket.id].activeDMs = new Set();
+            }
+            userSockets[socket.id].activeDMs.add(data.to);
+        }
+
         if (targetSocketId) {
+            // Track active DMs for receiver
+            if (userSockets[targetSocketId]) {
+                if (!userSockets[targetSocketId].activeDMs) {
+                    userSockets[targetSocketId].activeDMs = new Set();
+                }
+                userSockets[targetSocketId].activeDMs.add(data.from);
+            }
+
             await Message.create({
                 from: data.from,
                 to: data.to,
@@ -395,6 +416,22 @@ io.on('connection', (socket) => {
 
     //  DM history 
     socket.on('get-dm-history', async ({ user1, user2 }) => {
+        // Also mark as active DM when history is requested (implies starting a chat)
+        if (userSockets[socket.id]) {
+            if (!userSockets[socket.id].activeDMs) {
+                userSockets[socket.id].activeDMs = new Set();
+            }
+            userSockets[socket.id].activeDMs.add(user2);
+        }
+
+        const targetSocketId = usernameToSocket[user2];
+        if (targetSocketId && userSockets[targetSocketId]) {
+            if (!userSockets[targetSocketId].activeDMs) {
+                userSockets[targetSocketId].activeDMs = new Set();
+            }
+            userSockets[targetSocketId].activeDMs.add(user1);
+        }
+
         const history = await Message.find({
             $or: [
                 { from: user1, to: user2 },
@@ -419,8 +456,31 @@ io.on('connection', (socket) => {
     //  Handling  disconnect
     socket.on('disconnect', () => {
         const user = userSockets[socket.id];
-        if (user && user.room) {
-            socket.to(user.room).emit('room-users', getUsersInRoom(user.room).filter(u => u !== user.username));
+        const timestamp = new Date().toLocaleTimeString();
+
+        if (user) {
+            // Notify Room
+            if (user.room) {
+                socket.to(user.room).emit('room-users', getUsersInRoom(user.room).filter(u => u !== user.username));
+                socket.to(user.room).emit('room-user-disconnect', {
+                    username: user.username,
+                    timestamp
+                });
+            }
+
+            // Notify DM partners
+            if (user.activeDMs) {
+                user.activeDMs.forEach(partnerUsername => {
+                    const partnerSocketId = usernameToSocket[partnerUsername];
+                    if (partnerSocketId) {
+                        io.to(partnerSocketId).emit('dm-user-disconnect', {
+                            username: user.username,
+                            timestamp
+                        });
+                    }
+                });
+            }
+
             delete usernameToSocket[user.username];
         }
         delete userSockets[socket.id];
