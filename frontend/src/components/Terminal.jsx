@@ -413,6 +413,66 @@ const Terminal = () => {
                 });
                 writePrompt();
             });
+
+            // CRITICAL: Room message listener (for receiving messages from others)
+            socket.on('room-message', (data) => {
+                // Don't print our own messages twice (already printed locally)
+                if (data.user !== state.current.username) {
+                    xtermRef.current.write(`\r\n[${data.room}] ${data.user}: ${data.msg}\r\n`);
+                    writePrompt();
+                }
+            });
+
+            // CRITICAL: DM listener (for receiving DMs)
+            socket.on('dm', (data) => {
+                // Only print DMs sent BY others (not echoes of our own)
+                if (data.from !== state.current.username) {
+                    xtermRef.current.write(`\r\n[DM from ${data.from}]: ${data.msg}\r\n`);
+                    writePrompt();
+                }
+            });
+
+            // DM error notifications
+            socket.on('dm-error', ({ msg }) => {
+                xtermRef.current.write(`\r\nDM Error: ${msg}\r\n`);
+                writePrompt();
+            });
+
+            // Connection events for auto-reconnect
+            socket.on('connect', () => {
+                xtermRef.current.write('\r\nConnected to server.\r\n');
+                // Auto-rejoin room if we were in one
+                if (state.current.currentRoom) {
+                    xtermRef.current.write(`Re-joining room ${state.current.currentRoom}...\r\n`);
+                    socket.emit('join-room', {
+                        room: state.current.currentRoom,
+                        username: state.current.username
+                    });
+                }
+                writePrompt();
+            });
+
+            socket.on('disconnect', () => {
+                const timestamp = new Date().toLocaleTimeString();
+                xtermRef.current.write(`\r\nDisconnected from server at ${timestamp}.\r\n`);
+                writePrompt();
+            });
+
+            socket.on('connect_error', (error) => {
+                xtermRef.current.write(`\r\nConnection error: ${error.message}\r\n`);
+                writePrompt();
+            });
+
+            // Disconnect notifications
+            socket.on('room-user-disconnect', ({ username, timestamp }) => {
+                xtermRef.current.write(`\r\n[${state.current.currentRoom}] ${username} disconnected at ${timestamp}\r\n`);
+                writePrompt();
+            });
+
+            socket.on('dm-user-disconnect', ({ username, timestamp }) => {
+                xtermRef.current.write(`\r\n[DM] ${username} disconnected at ${timestamp}\r\n`);
+                writePrompt();
+            });
         }
 
         xtermRef.current.onKey(({ key, domEvent }) => {
