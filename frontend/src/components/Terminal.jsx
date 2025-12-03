@@ -365,21 +365,10 @@ const Terminal = () => {
 
             // Room join events
             socket.on('join-room-success', ({ room }) => {
-                // Only show "Joined room" if we initiated it, or maybe always? 
-                // For re-connection, we might want to be subtle, but "Joined room" confirms success.
-                // Let's keep it simple for now.
-                // xtermRef.current.write(`Joined room: ${room}\r\n`); 
-                // Actually, let's check if we are already in the room to avoid spam on reconnect?
-                // But the server emits this. Let's just let it print.
-                // Wait, if we are re-connecting, we printed "Re-joining room...".
-                // Let's just print it.
-                // xtermRef.current.write(`Joined room: ${room}\r\n`);
-
-                // To avoid double printing on initial join vs reconnect, we can rely on the user intent.
-                // But here we just receive the event.
-                // Let's just print it, it confirms to the user they are back in.
+                state.current.currentRoom = room;
+                state.current.inDM = false;
+                state.current.dmUser = '';
                 xtermRef.current.write(`Joined room: ${room}\r\n`);
-
                 socket.emit('get-users', { room });
                 writePrompt();
             });
