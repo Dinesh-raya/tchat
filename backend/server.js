@@ -368,7 +368,7 @@ io.on('connection', (socket) => {
     });
 
     //  Room message 
-    socket.on('room-message', async (data) => {
+    socket.on('room-message', async (data, callback) => {
         // data: { room, msg, user }
         if (userSockets[socket.id]?.room === data.room) {
             await Message.create({
@@ -377,11 +377,14 @@ io.on('connection', (socket) => {
                 text: data.msg
             });
             io.to(data.room).emit('room-message', data);
+            if (callback) callback({ status: 'ok' });
+        } else {
+            if (callback) callback({ status: 'error', msg: 'You are not in this room.' });
         }
     });
 
     //  Direct message (DM) 
-    socket.on('dm', async (data) => {
+    socket.on('dm', async (data, callback) => {
         // data: { to, from, msg }
         const targetSocketId = usernameToSocket[data.to];
 
@@ -409,8 +412,10 @@ io.on('connection', (socket) => {
             });
             io.to(targetSocketId).emit('dm', data);
             socket.emit('dm', data); // echo to sender
+            if (callback) callback({ status: 'ok' });
         } else {
             socket.emit('dm-error', { msg: `User ${data.to} is not online.` });
+            if (callback) callback({ status: 'error', msg: `User ${data.to} is not online.` });
         }
     });
 

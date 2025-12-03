@@ -446,12 +446,22 @@ const Terminal = () => {
                                     to: state.current.dmUser,
                                     msg: trimmedInput,
                                     from: state.current.username
+                                }, (response) => {
+                                    if (response && response.status !== 'ok') {
+                                        xtermRef.current.write(`\r\nError sending DM: ${response.msg}\r\n`);
+                                        writePrompt();
+                                    }
                                 });
                             } else if (state.current.currentRoom) {
                                 socketRef.current.emit('room-message', {
                                     room: state.current.currentRoom,
                                     msg: trimmedInput,
                                     user: state.current.username
+                                }, (response) => {
+                                    if (response && response.status !== 'ok') {
+                                        xtermRef.current.write(`\r\nError sending message: ${response.msg}\r\n`);
+                                        writePrompt();
+                                    }
                                 });
                             }
                         }
